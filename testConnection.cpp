@@ -23,7 +23,7 @@ protected:
 
     virtual ~UsbDeviceConnectionTest() {
         if (m_devs != nullptr) {
-            libusb_free_device_list(m_devs, 0);
+            libusb_free_device_list(m_devs, 1);
         }
 
         if (m_ctx != nullptr) {
