@@ -43,6 +43,7 @@ set(TARGET_SRC
     main.cpp
     testConnection.cpp
     testConfiguration.cpp
+    testBulkTransfer.cpp
 )
 add_executable(${TARGET_NAME} ${TARGET_SRC})
 target_include_directories(${TARGET_NAME} PRIVATE
