@@ -13,7 +13,7 @@ protected:
     static const uint16_t   m_vendorId;
     static const uint16_t   m_deviceId;
 
-    static const int        m_debugConfiguration;
+    static const int        m_testConfiguration;
 
     libusb_context *        m_ctx;
     libusb_device **        m_devs;
@@ -76,7 +76,7 @@ protected:
 
 const uint16_t UsbDeviceConfigurationTest::m_vendorId = 0xdead;
 const uint16_t UsbDeviceConfigurationTest::m_deviceId = 0xbeef;
-const int UsbDeviceConfigurationTest::m_debugConfiguration = 1;
+const int UsbDeviceConfigurationTest::m_testConfiguration = 1;
 
 TEST_F(UsbDeviceConfigurationTest, GetConfiguration) {
     int cfgNum;
@@ -90,13 +90,13 @@ TEST_F(UsbDeviceConfigurationTest, GetConfiguration) {
 TEST_F(UsbDeviceConfigurationTest, ActivateConfiguration) {
     int rc, cfgNum;
 
-    rc = libusb_set_configuration(m_dutHandle, m_debugConfiguration);
-    EXPECT_EQ(LIBUSB_SUCCESS, rc) << "Configuration '" << m_debugConfiguration << "' could not be activated.";
+    rc = libusb_set_configuration(m_dutHandle, m_testConfiguration);
+    EXPECT_EQ(LIBUSB_SUCCESS, rc) << "Configuration '" << m_testConfiguration << "' could not be activated.";
 
     rc = libusb_get_configuration(m_dutHandle, &cfgNum);
     EXPECT_EQ(0, rc);
 
-    EXPECT_EQ(m_debugConfiguration, cfgNum) << "Expected USB Device Configuration '" << m_debugConfiguration << "', but Configuration '" << cfgNum << "' is active.";
+    EXPECT_EQ(m_testConfiguration, cfgNum) << "Expected USB Device Configuration '" << m_testConfiguration << "', but Configuration '" << cfgNum << "' is active.";
 }
 
 TEST_F(UsbDeviceConfigurationTest, DeactivateConfiguration) {
@@ -105,7 +105,7 @@ TEST_F(UsbDeviceConfigurationTest, DeactivateConfiguration) {
     rc = libusb_get_configuration(m_dutHandle, &cfgNum);
     EXPECT_EQ(0, rc);
 
-    EXPECT_EQ(m_debugConfiguration, cfgNum) << "Expected USB Device Configuration '" << m_debugConfiguration << "', but Configuration '" << cfgNum << "' is active.";
+    EXPECT_EQ(m_testConfiguration, cfgNum) << "Expected USB Device Configuration '" << m_testConfiguration << "', but Configuration '" << cfgNum << "' is active.";
 
     /*
      * libusb Documentation says that -1 should be used to re-set the device configuration
