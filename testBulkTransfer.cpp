@@ -8,6 +8,8 @@
 
 #include <algorithm>
 
+#include <cstdlib>
+
 class BulkTransferTest : public ::testing::Test {
 protected:
     static const uint16_t   m_vendorId;
@@ -148,15 +150,15 @@ const int BulkTransferTest::m_outEndpoint = 0x01;
 const int BulkTransferTest::m_inEndpoint = 0x81;
 
 const int BulkTransferTest::m_txTimeout = 1500;
-const int BulkTransferTest::m_rxTimeout = 1500;
+const int BulkTransferTest::m_rxTimeout = 5000;
 
-TEST_F(BulkTransferTest, Loopback) {
+TEST_F(BulkTransferTest, LoopbackSmall) {
     const std::vector<uint8_t> txBuf { 0x12, 0x34, 0x56, 0x78 };
     std::vector<uint8_t> rxBuf(txBuf.size());
     int rc, txLen, rxLen;
 
     /* USB Device's buffer is quite small */
-    ASSERT_GE(sizeof(uint32_t), txBuf.size());
+    ASSERT_GE(512, txBuf.size());
 
     rc = libusb_bulk_transfer(m_dutHandle, m_outEndpoint, const_cast<unsigned char *>(txBuf.data()), txBuf.size(), &txLen, m_txTimeout);
     EXPECT_EQ(LIBUSB_SUCCESS, rc) << "Bulk Tx transfer failed.";
@@ -167,15 +169,46 @@ TEST_F(BulkTransferTest, Loopback) {
     EXPECT_EQ(txBuf, rxBuf);
 }
 
-TEST_F(BulkTransferTest, LoopbackMultiple) {
-    const std::vector<uint8_t> txBuf { 0x12, 0x34, 0x56, 0x78 };
+TEST_F(BulkTransferTest, LoopbackLarge) {
+    std::vector<uint8_t> txBuf(8);
     std::vector<uint8_t> rxBuf(txBuf.size());
     int rc, txLen, rxLen;
 
     /* USB Device's buffer is quite small */
-    ASSERT_GE(sizeof(uint32_t), txBuf.size());
+    ASSERT_GE(512, txBuf.size());
 
-    for (int cnt = 0; cnt < 10; ++cnt) {
+    std::generate(txBuf.begin(), txBuf.end(), [&]{ return arc4random(); });
+
+    rc = libusb_bulk_transfer(m_dutHandle, m_outEndpoint, txBuf.data(), txBuf.size(), &txLen, m_txTimeout);
+    EXPECT_EQ(LIBUSB_SUCCESS, rc) << "Bulk Tx transfer failed.";
+
+    sleep(5);
+
+    rc = libusb_bulk_transfer(m_dutHandle, m_inEndpoint, rxBuf.data(), std::min(static_cast<size_t>(txLen), rxBuf.size()), &rxLen, m_rxTimeout);
+    EXPECT_EQ(LIBUSB_SUCCESS, rc) << "Bulk Rx transfer failed.";
+
+    EXPECT_EQ(txBuf, rxBuf);
+
+    sleep(5);
+}
+
+TEST_F(BulkTransferTest, LoopbackMultiple) {
+    static const unsigned transferSz = 512;
+    static const unsigned transferCnt = 1024;
+
+    std::vector<uint8_t> txBuf(transferSz);
+    std::vector<uint8_t> rxBuf(txBuf.size());
+    int rc, txLen, rxLen;
+
+    /* USB Device's buffer is quite small */
+    ASSERT_GE(512, txBuf.size());
+
+    for (unsigned cnt = 0; cnt < transferCnt; ++cnt) {
+        txBuf.clear();
+        txBuf.resize(transferSz);
+
+        std::generate(txBuf.begin(), txBuf.end(), [&]{ return arc4random(); });
+
         rxBuf.clear();
         rxBuf.resize(txBuf.size());
         ASSERT_EQ(rxBuf.size(), txBuf.size());
