@@ -2,12 +2,10 @@
  * $Copyright$
  */
 
-#include <iostream>
+#include <gtest/gtest.h>
 
 int
-main(void) {
-    std::cout << "Hello, World" << std::endl;
-
-    return (0);
-
+main(int argc, char **argv) {
+  ::testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
 }
