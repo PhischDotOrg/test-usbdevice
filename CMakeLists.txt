@@ -41,9 +41,10 @@ add_subdirectory(contrib)
 set(TARGET_NAME ${CMAKE_PROJECT_NAME})
 set(TARGET_SRC
     main.cpp
+    testBulkTransfer.cpp
     testConnection.cpp
     testConfiguration.cpp
-    testBulkTransfer.cpp
+    testControlTransfer.cpp
 )
 add_executable(${TARGET_NAME} ${TARGET_SRC})
 target_include_directories(${TARGET_NAME} PRIVATE
