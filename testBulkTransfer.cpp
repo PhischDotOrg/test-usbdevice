@@ -117,8 +117,12 @@ protected:
     }
 
     void TearDown() override {
-        int rc = libusb_release_interface(m_dutHandle, m_testInterface);
-        EXPECT_EQ(0, rc);
+        // sleep(2);
+
+        if (nullptr != m_dutHandle) {
+            int rc = libusb_release_interface(m_dutHandle, m_testInterface);
+            EXPECT_EQ(0, rc);
+        }
 
         this->ClearConfiguration();
 
@@ -170,7 +174,7 @@ TEST_F(BulkTransferTest, LoopbackSmall) {
 }
 
 TEST_F(BulkTransferTest, LoopbackLarge) {
-    std::vector<uint8_t> txBuf(8);
+    std::vector<uint8_t> txBuf(64);
     std::vector<uint8_t> rxBuf(txBuf.size());
     int rc, txLen, rxLen;
 
@@ -181,20 +185,16 @@ TEST_F(BulkTransferTest, LoopbackLarge) {
 
     rc = libusb_bulk_transfer(m_dutHandle, m_outEndpoint, txBuf.data(), txBuf.size(), &txLen, m_txTimeout);
     EXPECT_EQ(LIBUSB_SUCCESS, rc) << "Bulk Tx transfer failed.";
+    EXPECT_EQ(txLen, txBuf.size());
 
-    sleep(5);
-
-    rc = libusb_bulk_transfer(m_dutHandle, m_inEndpoint, rxBuf.data(), std::min(static_cast<size_t>(txLen), rxBuf.size()), &rxLen, m_rxTimeout);
+    rc = libusb_bulk_transfer(m_dutHandle, m_inEndpoint, rxBuf.data(), rxBuf.size(), &rxLen, m_rxTimeout);
     EXPECT_EQ(LIBUSB_SUCCESS, rc) << "Bulk Rx transfer failed.";
-
     EXPECT_EQ(txBuf, rxBuf);
-
-    sleep(5);
 }
 
 TEST_F(BulkTransferTest, LoopbackMultiple) {
-    static const unsigned transferSz = 512;
-    static const unsigned transferCnt = 1024;
+    static const unsigned transferSz = 64;
+    static const unsigned transferCnt = (1024 / transferSz) * 1024 * 1;
 
     std::vector<uint8_t> txBuf(transferSz);
     std::vector<uint8_t> rxBuf(txBuf.size());
