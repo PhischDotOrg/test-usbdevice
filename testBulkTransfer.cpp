@@ -181,7 +181,7 @@ TEST_F(BulkTransferTest, LoopbackLarge) {
     /* USB Device's buffer is quite small */
     ASSERT_GE(512, txBuf.size());
 
-    std::generate(txBuf.begin(), txBuf.end(), [&]{ return arc4random(); });
+    std::generate(txBuf.begin(), txBuf.end(), [&]{ return rand(); });
 
     rc = libusb_bulk_transfer(m_dutHandle, m_outEndpoint, txBuf.data(), txBuf.size(), &txLen, m_txTimeout);
     EXPECT_EQ(LIBUSB_SUCCESS, rc) << "Bulk Tx transfer failed.";
@@ -207,7 +207,7 @@ TEST_F(BulkTransferTest, LoopbackMultiple) {
         txBuf.clear();
         txBuf.resize(transferSz);
 
-        std::generate(txBuf.begin(), txBuf.end(), [&]{ return arc4random(); });
+        std::generate(txBuf.begin(), txBuf.end(), [&]{ return rand(); });
 
         rxBuf.clear();
         rxBuf.resize(txBuf.size());
