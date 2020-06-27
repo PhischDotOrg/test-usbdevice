@@ -111,7 +111,11 @@ protected:
         ASSERT_EQ(0, rc);
         ASSERT_NE(nullptr, m_dutHandle);
 
-        this->SetConfiguration();
+        #if defined(__APPLE__) && defined(__MACH__)
+            /* For whatever reason calling SetConfiguration() here breaks the tests on macOS. */
+        #else
+            this->SetConfiguration();
+        #endif
 
         rc = libusb_claim_interface(m_dutHandle, m_testInterface);
     }
