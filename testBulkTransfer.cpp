@@ -117,8 +117,6 @@ protected:
     }
 
     void TearDown() override {
-        // sleep(2);
-
         if (nullptr != m_dutHandle) {
             int rc = libusb_release_interface(m_dutHandle, m_testInterface);
             EXPECT_EQ(0, rc);
