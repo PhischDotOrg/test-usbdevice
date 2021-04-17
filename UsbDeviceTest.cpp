@@ -78,7 +78,7 @@ UsbDeviceTest::resetDeviceConfiguration() {
     * Since we're testing a device that should handle the configuration according to the
     * USB standard, this fear should not apply.
     */
-    rc = libusb_set_configuration(m_dutHandle, 0);
+    rc = libusb_set_configuration(m_dutHandle, -1);
     EXPECT_EQ(LIBUSB_SUCCESS, rc) << "Configuration could not be de-activated.";
 
     rc = libusb_get_configuration(m_dutHandle, &cfgNum);
@@ -190,9 +190,9 @@ UsbDeviceTest::parseInterfaceDescriptor(void) {
         ASSERT_NE(nullptr, endpt);
 
         libusb_endpoint_direction dir = getEndpointDirection(*endpt);
-        libusb_endpoint_transfer_type type = getEndpointType(*endpt);
+        libusb_transfer_type type = getEndpointType(*endpt);
 
-        if (type == LIBUSB_ENDPOINT_TRANSFER_TYPE_BULK) {
+        if (type == LIBUSB_TRANSFER_TYPE_BULK) {
             if (dir == LIBUSB_ENDPOINT_OUT) {
                 m_bulkOutEndpoint = endpt;
             } else if (dir == LIBUSB_ENDPOINT_IN) {

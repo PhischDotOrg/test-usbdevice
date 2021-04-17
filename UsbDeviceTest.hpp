@@ -48,9 +48,9 @@ class UsbDeviceTest : public ::testing::Test {
     }
 
     static
-    enum libusb_endpoint_transfer_type
+    enum libusb_transfer_type
     getEndpointType(const struct libusb_endpoint_descriptor &p_endptDescriptor) {
-        return static_cast<enum libusb_endpoint_transfer_type>(((p_endptDescriptor.bmAttributes >> 0) & 0b11));
+        return static_cast<enum libusb_transfer_type>(((p_endptDescriptor.bmAttributes >> 0) & 0b11));
     }
 
 
