@@ -45,6 +45,7 @@ set(TARGET_SRC
     testConnection.cpp
     testConfiguration.cpp
     testControlTransfer.cpp
+    UsbDeviceTest.cpp
 )
 add_executable(${TARGET_NAME} ${TARGET_SRC})
 target_include_directories(${TARGET_NAME} PRIVATE

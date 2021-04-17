@@ -163,7 +163,7 @@ TEST_F(ControlTransferTest, GetStatus) {
     EXPECT_EQ(sizeof(uint16_t), rc);
 }
 
-TEST_F(ControlTransferTest, InvalidRequest) {
+TEST_F(ControlTransferTest, DISABLED_InvalidRequest) {
     std::vector<uint8_t> rxBuf(sizeof(uint16_t));
     int rc;
 
