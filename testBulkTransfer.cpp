@@ -13,39 +13,43 @@
 class BulkTransferTest : public UsbDeviceTest {
 protected:
     void
+    multipleBulkTransfers(const unsigned p_nTransfers, const unsigned p_nBytes) {
+        for (unsigned idx = 0; idx < p_nTransfers; idx++) {
+            singleBulkTransfer(p_nBytes);
+        }
+    }
+
+    void
     singleBulkTransfer(const unsigned p_nBytes) {
         std::vector<uint8_t> txBuf(p_nBytes);
-        std::vector<uint8_t> rxBuf(txBuf.size());
-        int rc, txLen, rxLen;
 
         std::generate(txBuf.begin(), txBuf.end(), [&]{ return rand(); });
 
-        rc = libusb_bulk_transfer(m_dutHandle, m_bulkOutEndpoint->bEndpointAddress, txBuf.data(), txBuf.size(), &txLen, m_txTimeout);
-        EXPECT_EQ(LIBUSB_SUCCESS, rc) << "Bulk Tx transfer failed.";
-        EXPECT_EQ(txLen, txBuf.size());
+        singleBulkTransfer(txBuf);
+    }
+
+    void
+    singleBulkTransfer(const std::vector<uint8_t> &p_txBuf, const unsigned p_iteration = 0) {
+        std::vector<uint8_t> rxBuf(p_txBuf.size());
+        int rc, txLen, rxLen;
+
+        /* Cast to non-const C-Style Pointer so our parameter can be a const Reference */
+        uint8_t * const txBuf = const_cast<uint8_t * const>(p_txBuf.data());
+
+        rc = libusb_bulk_transfer(m_dutHandle, m_bulkOutEndpoint->bEndpointAddress, txBuf, p_txBuf.size(), &txLen, m_txTimeout);
+        EXPECT_EQ(LIBUSB_SUCCESS, rc) << "Bulk Tx transfer failed (Iteration #" << p_iteration << ")";
+        EXPECT_EQ(txLen, p_txBuf.size());
 
         rc = libusb_bulk_transfer(m_dutHandle, m_bulkInEndpoint->bEndpointAddress, rxBuf.data(), rxBuf.size(), &rxLen, m_rxTimeout);
-        EXPECT_EQ(LIBUSB_SUCCESS, rc) << "Bulk Rx transfer failed.";
+        EXPECT_EQ(LIBUSB_SUCCESS, rc) << "Bulk Rx transfer failed (Iteration #" << p_iteration << ")";
 
-        EXPECT_EQ(txBuf, rxBuf);
+        EXPECT_EQ(p_txBuf, rxBuf) << "Iteration #" << p_iteration;
     }
 };
 
-TEST_F(BulkTransferTest, LoopbackSmall) {
+TEST_F(BulkTransferTest, SingleTransferSmall) {
     const std::vector<uint8_t> txBuf { 0x12, 0x34, 0x56, 0x78 };
-    std::vector<uint8_t> rxBuf(txBuf.size());
-    int rc, txLen, rxLen;
-
-    /* USB Device's buffer is quite small */
-    ASSERT_GE(m_maxBufferSz, txBuf.size());
-
-    rc = libusb_bulk_transfer(m_dutHandle, m_bulkOutEndpoint->bEndpointAddress, const_cast<unsigned char *>(txBuf.data()), txBuf.size(), &txLen, m_txTimeout);
-    EXPECT_EQ(LIBUSB_SUCCESS, rc) << "Bulk Tx transfer failed.";
-
-    rc = libusb_bulk_transfer(m_dutHandle, m_bulkInEndpoint->bEndpointAddress, rxBuf.data(), std::min(static_cast<size_t>(txLen), rxBuf.size()), &rxLen, m_rxTimeout);
-    EXPECT_EQ(LIBUSB_SUCCESS, rc) << "Bulk Rx transfer failed.";
-
-    EXPECT_EQ(txBuf, rxBuf);
+    singleBulkTransfer(txBuf);
 }
 
 TEST_F(BulkTransferTest, SingleTransferSinglePacketMinusOne) {
@@ -72,13 +76,21 @@ TEST_F(BulkTransferTest, SingleTransferBufferSizeMinusOne) {
     singleBulkTransfer(m_maxBufferSz - 1);
 }
 
-
 TEST_F(BulkTransferTest, SingleTransferBufferSize) {
     singleBulkTransfer(m_maxBufferSz);
 }
 
 TEST_F(BulkTransferTest, DISABLED_SingleTransferBufferSizePlusOne) {
     singleBulkTransfer(m_maxBufferSz + 1);
+}
+
+TEST_F(BulkTransferTest, MultiTransferSmall) {
+    const std::vector<uint8_t> txBuf1 { 0x12, 0x34, 0x56, 0x78 };
+    const std::vector<uint8_t> txBuf2 { 0x90, 0xab, 0xcd, 0xef, 0x12, 0x34 };
+
+    singleBulkTransfer(txBuf1, 0);
+    // sleep(1);
+    singleBulkTransfer(txBuf2, 1);
 }
 
 #if 0
