@@ -8,140 +8,141 @@
 
 #include <algorithm>
 
-class ControlTransferTest : public ::testing::Test {
+#include "UsbDeviceTest.hpp"
+
+/******************************************************************************/
+namespace usb {
+/******************************************************************************/
+struct SetupPacket {
+    struct RequestType {
+        enum class Direction : uint8_t {
+            e_HostToDevice  = 0b0,
+            e_DeviceToHost  = 0b1,
+        };
+        static_assert(sizeof(Direction) == 1);
+
+        enum class Type : uint8_t {
+            e_Standard  = 0,
+            e_Class     = 1,
+            e_Vendor    = 2,
+            e_Reserved  = 3,
+        };
+        static_assert(sizeof(Type) == 1);
+
+        enum class Recipient : uint8_t {
+            e_Device    = 0,
+            e_Interface = 1,
+            e_Endpoint  = 2,
+            e_Other     = 3,
+            e_Reserved  = 31,
+        };
+        static_assert(sizeof(Recipient) == 1);
+
+        Direction   m_direction : 1;
+        Type        m_type      : 2;
+        Recipient   m_recipient : 5;
+
+        explicit constexpr
+        operator uint8_t(void) const {
+            return (
+                   ((static_cast<uint8_t>(m_direction)  << 7) & 0b1000'0000)
+                 | ((static_cast<uint8_t>(m_type)       << 5) & 0b0110'0000)
+                 | ((static_cast<uint8_t>(m_recipient)  << 0) & 0b0001'1111)
+            );
+        }
+    };
+    static_assert(sizeof(RequestType) == 1);
+
+    enum class Request : uint8_t {
+        e_NoData    = 0x01,
+        e_DataOut   = 0x02,
+        e_DataIn    = 0x03,
+        e_Invalid   = 0xFF
+    };
+    static_assert(sizeof(Request) == 1);
+
+    struct Parameter {
+        enum class ReturnCode : uint8_t {
+            e_Ack       = 0,
+            e_Timeout   = 1,
+            e_Stall     = 2,
+        };
+        static_assert(sizeof(ReturnCode) == 1);
+
+        ReturnCode  m_value;
+        uint8_t     m_delayInMs;
+
+        explicit constexpr
+        operator uint16_t(void) const {
+            return (
+                   ((static_cast<uint16_t>(m_delayInMs) << 8) & 0xFF00)
+                 | ((static_cast<uint16_t>(m_value) << 0) & 0x00FF)
+            );
+        }
+    };
+    static_assert(sizeof(Parameter) == 2);
+
+    RequestType     m_bmRequestType;
+    Request         m_bRequest;
+    // union u_wValue {
+    //     uint16_t    m_raw;
+    //     Parameter   m_parameter;
+    // };
+    Parameter       m_wValue;
+    uint16_t        m_wIndex;
+    uint16_t        m_wLength;
+};
+static_assert(sizeof(SetupPacket) == 8);
+
+/******************************************************************************/
+} /* namespace usb */
+/******************************************************************************/
+
+class ControlTransferTest : public UsbDeviceTest {
+    int
+    ctrlTransfer(const usb::SetupPacket &p_setupPacket, std::vector<uint8_t> * const p_data) const {
+        uint8_t     bmRequestType = static_cast<uint8_t>(p_setupPacket.m_bmRequestType);
+        uint8_t     bRequest = static_cast<uint8_t>(p_setupPacket.m_bRequest);
+        uint16_t    wValue = static_cast<uint16_t>(p_setupPacket.m_wValue);
+
+        int rc = libusb_control_transfer(
+                    m_dutHandle,
+                    bmRequestType,
+                    bRequest,
+                    wValue,
+                    p_setupPacket.m_wIndex,
+                    p_data == nullptr ? nullptr : p_data->data(),
+                    std::min(p_data == nullptr ? 0 : p_data->size(), static_cast<size_t>(p_setupPacket.m_wLength)),
+                    m_ctrlTimeout
+            );
+
+        return rc;
+    }
+
 protected:
-    static const uint16_t   m_vendorId;
-    static const uint16_t   m_deviceId;
+    int
+    ctrlTransfer(::usb::SetupPacket::Request p_request, ::usb::SetupPacket::Parameter::ReturnCode p_returnCode,
+      uint8_t p_delayInMs, std::vector<uint8_t> * const p_data) const {
+        ::usb::SetupPacket setupPacket = {
+            .m_bmRequestType = {
+                .m_direction    = p_request == ::usb::SetupPacket::Request::e_DataIn ? ::usb::SetupPacket::RequestType::Direction::e_DeviceToHost : ::usb::SetupPacket::RequestType::Direction::e_HostToDevice,
+                .m_type         = ::usb::SetupPacket::RequestType::Type::e_Vendor,
+                .m_recipient    = ::usb::SetupPacket::RequestType::Recipient::e_Interface,
+            },
+            .m_bRequest         = p_request,
+            .m_wValue = {
+                .m_value        = p_returnCode,
+                .m_delayInMs    = p_delayInMs,
+            },
+            .m_wIndex           = 0,
+            .m_wLength          = (p_data == nullptr) ?
+                                    static_cast<uint16_t>(0u) : (p_data->size() < (1 << 16)) ?
+                                        static_cast<uint16_t>(p_data->size()) : static_cast<uint16_t>((1 << 16) - 1)
+        };
 
-    libusb_context *        m_ctx;
-    libusb_device **        m_devs;
-    ssize_t                 m_cnt;
-    libusb_device *         m_dutRef;
-    libusb_device_handle *  m_dutHandle;
-
-    static const int        m_testConfiguration;
-    int                     m_activeConfiguration;
-
-    static const int        m_testInterface;
-
-    static const int        m_timeout;
-
-    void SetConfiguration() {
-        int cfgNum, rc;
-
-        rc = libusb_get_configuration(m_dutHandle, &cfgNum);
-        EXPECT_EQ(0, rc);
-
-        ASSERT_EQ(0, cfgNum) << "Expected USB Device to be unconfigured but Configuration '" << cfgNum << "' is already active.";
-
-        rc = libusb_set_configuration(m_dutHandle, m_testConfiguration);
-        ASSERT_EQ(LIBUSB_SUCCESS, rc) << "Configuration '" << m_testConfiguration << "' could not be activated.";
-
-        rc = libusb_get_configuration(m_dutHandle, &m_activeConfiguration);
-        EXPECT_EQ(0, rc);
-
-        ASSERT_EQ(m_testConfiguration, m_activeConfiguration) << "Expected USB Device Configuration '" << m_testConfiguration
-          << "', but Configuration '" << m_activeConfiguration << "' is active.";
-    }
-
-    void ClearConfiguration() {
-        int cfgNum, rc;
-
-        if (!m_activeConfiguration) {
-            return;
-        }
-
-        rc = libusb_get_configuration(m_dutHandle, &cfgNum);
-        EXPECT_EQ(0, rc);
-
-        ASSERT_EQ(m_activeConfiguration, cfgNum) << "Expected USB Device Configuration '" << m_activeConfiguration << "', but Configuration '" << cfgNum << "' is active.";
-
-        /*
-        * libusb Documentation says that -1 should be used to re-set the device configuration
-        * because buggy USB devices may actually have a configuration #0. Unfortunately, I
-        * found that this crashes (on macOS).
-        * 
-        * Since we're testing a device that should handle the configuration according to the
-        * USB standard, this fear should not apply.
-        */
-        rc = libusb_set_configuration(m_dutHandle, 0);
-        EXPECT_EQ(LIBUSB_SUCCESS, rc) << "Configuration could not be de-activated.";
-
-        rc = libusb_get_configuration(m_dutHandle, &cfgNum);
-        EXPECT_EQ(0, rc);
-
-        ASSERT_EQ(0, cfgNum) << "Expected USB Device Configuration '0', but Configuration '" << cfgNum << "' is active.";
-    }
-
-protected:
-    ControlTransferTest() : m_ctx(nullptr), m_devs(nullptr), m_cnt(0),
-      m_dutRef(nullptr), m_dutHandle(nullptr), m_activeConfiguration(0) {
-
-    }
-
-    void SetUp(void) override {
-        int rc = libusb_init(&m_ctx);
-        ASSERT_EQ(LIBUSB_SUCCESS, rc) << "Failed to initialize libusb";
-        ASSERT_NE(nullptr, m_ctx);
-
-        libusb_set_option(m_ctx, LIBUSB_OPTION_LOG_LEVEL, LIBUSB_LOG_LEVEL_INFO);
-
-        m_cnt = libusb_get_device_list(this->m_ctx, &this->m_devs);
-        ASSERT_GE(m_cnt, 0) << __func__ << ": Failed to obtain the list of devices.";
-        ASSERT_NE(nullptr, m_devs);
-
-        libusb_device_descriptor desc;
-        for (ssize_t i = 0; (i < m_cnt) && (m_dutRef == nullptr); i++) {
-            int rc = libusb_get_device_descriptor(m_devs[i], &desc);
-            EXPECT_EQ(0, rc);
-
-            if ((desc.idVendor == m_vendorId) && (desc.idProduct == m_deviceId)) {
-                m_dutRef = libusb_ref_device(m_devs[i]);
-            }
-        }
-        ASSERT_NE(nullptr, m_dutRef);
-
-        rc = libusb_open(m_dutRef, &m_dutHandle);
-        ASSERT_EQ(0, rc);
-        ASSERT_NE(nullptr, m_dutHandle);
-
-        this->SetConfiguration();
-
-        rc = libusb_claim_interface(m_dutHandle, m_testInterface);
-    }
-
-    void TearDown() override {
-        if (nullptr != m_dutHandle) {
-            int rc = libusb_release_interface(m_dutHandle, m_testInterface);
-            EXPECT_EQ(0, rc);
-        }
-
-        this->ClearConfiguration();
-
-        if (m_dutHandle != nullptr) {
-            libusb_close(m_dutHandle);
-        }
-
-        if (m_dutRef != nullptr) {
-            libusb_unref_device(m_dutRef);
-        }
-
-        if (m_devs != nullptr) {
-            libusb_free_device_list(m_devs, 1);
-        }
-
-        if (m_ctx != nullptr) {
-            libusb_exit(m_ctx);
-        }
+        return ctrlTransfer(setupPacket, p_data);
     }
 };
-
-const uint16_t ControlTransferTest::m_vendorId = 0xdead;
-const uint16_t ControlTransferTest::m_deviceId = 0xbeef;
-const int ControlTransferTest::m_testConfiguration = 1;
-const int ControlTransferTest::m_testInterface = 1;
-
-const int ControlTransferTest::m_timeout = 1500;
 
 TEST_F(ControlTransferTest, GetStatus) {
     std::vector<uint8_t> rxBuf(sizeof(uint16_t));
@@ -158,12 +159,164 @@ TEST_F(ControlTransferTest, GetStatus) {
       0x0,          /* wIndex */
       rxBuf.data(),
       std::min(sizeof(uint16_t), rxBuf.size()), /* wLength */
-      m_timeout
+      m_ctrlTimeout
     );
-    EXPECT_EQ(sizeof(uint16_t), rc);
+    EXPECT_EQ(sizeof(uint16_t), rc) << libusb_error_name(rc);
 }
 
-TEST_F(ControlTransferTest, DISABLED_InvalidRequest) {
+/*****************************************************************************/
+// Control Transfers without Data Stage
+/*****************************************************************************/
+TEST_F(ControlTransferTest, NoDataStage_StatusStage_ACK) {
+    int rc = ctrlTransfer(
+        ::usb::SetupPacket::Request::e_NoData,
+        ::usb::SetupPacket::Parameter::ReturnCode::e_Ack,
+        0,
+        nullptr
+    );
+    EXPECT_EQ(LIBUSB_SUCCESS, rc) << libusb_error_name(rc);
+}
+
+TEST_F(ControlTransferTest, NoDataStage_StatusStage_NAK_to_ACK) {
+    int rc = ctrlTransfer(
+        ::usb::SetupPacket::Request::e_NoData,
+        ::usb::SetupPacket::Parameter::ReturnCode::e_Ack,
+        this->m_ctrlTimeout / 2,
+        nullptr
+    );
+    EXPECT_EQ(LIBUSB_SUCCESS, rc) << libusb_error_name(rc);
+}
+
+TEST_F(ControlTransferTest, DISABLED_NoDataStage_StatusStage_NAK_Timeout) {
+    int rc = ctrlTransfer(
+        ::usb::SetupPacket::Request::e_NoData,
+        ::usb::SetupPacket::Parameter::ReturnCode::e_Timeout,
+        -1,
+        nullptr
+    );
+    EXPECT_EQ(LIBUSB_ERROR_TIMEOUT, rc) << libusb_error_name(rc);
+}
+
+TEST_F(ControlTransferTest, NoDataStage_StatusStage_NAK_to_STALL) {
+    int rc = ctrlTransfer(
+        ::usb::SetupPacket::Request::e_NoData,
+        ::usb::SetupPacket::Parameter::ReturnCode::e_Stall,
+        this->m_ctrlTimeout / 2,
+        nullptr
+    );
+    EXPECT_NE(LIBUSB_SUCCESS, rc) << libusb_error_name(rc);
+}
+
+TEST_F(ControlTransferTest, NoDataStage_StatusStage_STALL) {
+    int rc = ctrlTransfer(
+        ::usb::SetupPacket::Request::e_NoData,
+        ::usb::SetupPacket::Parameter::ReturnCode::e_Stall,
+        0,
+        nullptr
+    );
+    EXPECT_NE(LIBUSB_SUCCESS, rc) << libusb_error_name(rc);
+}
+
+/*****************************************************************************/
+// Control Transfers with Data OUT Stage (Short Packet)
+/*****************************************************************************/
+TEST_F(ControlTransferTest, DataStage_OUT_Short_StatusStage_ACK) {
+
+}
+
+TEST_F(ControlTransferTest, DataStage_OUT_Short_StatusStage_NAK_to_ACK) {
+  
+}
+
+TEST_F(ControlTransferTest, DataStage_OUT_Short_StatusStage_NAK_Timeout) {
+  
+}
+
+TEST_F(ControlTransferTest, DataStage_OUT_Short_StatusStage_NAK_to_STALL) {
+  
+}
+
+TEST_F(ControlTransferTest, DataStage_OUT_Short_StatusStage_STALL) {
+  
+}
+
+/*****************************************************************************/
+// Control Transfers with Data OUT Stage (Almost Full Packet, i.e. 63 Bytes in
+// case of a Full Speed Device).
+/*****************************************************************************/
+TEST_F(ControlTransferTest, DataStage_OUT_AlmostFullPacket_StatusStage_ACK) {
+
+}
+
+TEST_F(ControlTransferTest, DataStage_OUT_AlmostFullPacket_NAK_to_ACK) {
+  
+}
+
+TEST_F(ControlTransferTest, DataStage_OUT_AlmostFullPacket_NAK_Timeout) {
+  
+}
+
+TEST_F(ControlTransferTest, DataStage_OUT_AlmostFullPacket_NAK_to_STALL) {
+  
+}
+
+TEST_F(ControlTransferTest, DataStage_OUT_AlmostFullPacket_STALL) {
+  
+}
+
+
+/*****************************************************************************/
+// Control Transfers with Data OUT Stage (Full Packet, i.e. exactly 64 Bytes
+// in case of a Full Speed Device).
+/*****************************************************************************/
+TEST_F(ControlTransferTest, DataStage_OUT_FullPacket_StatusStage_ACK) {
+
+}
+
+TEST_F(ControlTransferTest, DataStage_OUT_FullPacket_NAK_to_ACK) {
+  
+}
+
+TEST_F(ControlTransferTest, DataStage_OUT_FullPacket_NAK_Timeout) {
+  
+}
+
+TEST_F(ControlTransferTest, DataStage_OUT_FullPacket_NAK_to_STALL) {
+  
+}
+
+TEST_F(ControlTransferTest, DataStage_OUT_FullPacket_STALL) {
+  
+}
+
+/*****************************************************************************/
+// Control Transfers with Data OUT Stage (Multiple Packets)
+/*****************************************************************************/
+TEST_F(ControlTransferTest, DataStage_OUT_MultiplePackets_StatusStage_ACK) {
+
+}
+
+TEST_F(ControlTransferTest, DataStage_OUT_MultiplePackets_NAK_to_ACK) {
+  
+}
+
+TEST_F(ControlTransferTest, DataStage_OUT_MultiplePackets_NAK_Timeout) {
+  
+}
+
+TEST_F(ControlTransferTest, DataStage_OUT_MultiplePackets_NAK_to_STALL) {
+  
+}
+
+TEST_F(ControlTransferTest, DataStage_OUT_MultiplePackets_STALL) {
+  
+}
+
+/*****************************************************************************/
+// Control Transfers with an invalid request. Should yield the same result
+// as those with a STALL response.
+/*****************************************************************************/
+TEST_F(ControlTransferTest, InvalidRequest) {
     std::vector<uint8_t> rxBuf(sizeof(uint16_t));
     int rc;
 
@@ -178,7 +331,7 @@ TEST_F(ControlTransferTest, DISABLED_InvalidRequest) {
       0x0,          /* wIndex */
       rxBuf.data(),
       std::min(sizeof(uint16_t), rxBuf.size()), /* wLength */
-      m_timeout
+      m_ctrlTimeout
     );
     EXPECT_EQ(LIBUSB_ERROR_PIPE, rc);
 }

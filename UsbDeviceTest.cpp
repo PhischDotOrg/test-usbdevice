@@ -29,10 +29,6 @@ UsbDeviceTest::UsbDeviceTest(void)
 
 }
 
-UsbDeviceTest::~UsbDeviceTest() {
-
-}
-
 void
 UsbDeviceTest::activateDeviceConfiguration(void) {
     int rc;
@@ -152,8 +148,9 @@ UsbDeviceTest::libUsbInit(void) {
 
     /* TODO Query the Device's Characteristics */
     m_maxBufferSz   = 2 * m_bulkOutEndpoint->wMaxPacketSize;
-    m_txTimeout     = 250;
-    m_rxTimeout     = 250;
+    m_txTimeout     = 50;
+    m_rxTimeout     = 50;
+    m_ctrlTimeout   = 100;
 }
 
 void

@@ -1,3 +1,5 @@
 build/
 build-*/
 .vscode/settings.json
+.vscode/.cortex-debug*
+

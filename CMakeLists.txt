@@ -42,8 +42,6 @@ set(TARGET_NAME ${CMAKE_PROJECT_NAME})
 set(TARGET_SRC
     main.cpp
     testBulkTransfer.cpp
-    testConnection.cpp
-    testConfiguration.cpp
     testControlTransfer.cpp
     UsbDeviceTest.cpp
 )

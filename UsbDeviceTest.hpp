@@ -61,7 +61,7 @@ protected:
     unsigned                                    m_maxBufferSz;
     unsigned                                    m_txTimeout;
     unsigned                                    m_rxTimeout;
-
+    unsigned                                    m_ctrlTimeout;
 
     void SetUp(void) override {
         libUsbInit();
@@ -72,7 +72,6 @@ protected:
     }
 
     UsbDeviceTest(void);
-    virtual ~UsbDeviceTest();
 };
 
 #endif /* USB_DEVICE_TEST_HPP_C208FB0A_33A0_411C_91B3_F19C78ECCBA0 */
